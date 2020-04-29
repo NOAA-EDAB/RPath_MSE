@@ -1,0 +1,1350 @@
+---
+title: Evaluating fishery management strategies using an ecosystem model as an operating model
+author:
+  - name: Sean M. Lucey
+    email: Sean.Lucey@NOAA.gov
+    affiliation: NEFSC
+    footnote: Corresponding Author
+  - name: Kerim Y. Aydin
+    affiliation: AFSC
+  - name: Sarah K. Gaichas
+    affiliation: NEFSC
+  - name: Steven X. Cadrin
+    affiliation: SMAST
+  - name: Gavin Fay
+    affiliation: SMAST
+  - name: Michael J. Fogarty
+    affiliation: NEFSC
+  - name: Andr$\'{e}$ Punt
+    affiliation: UW
+address:
+  - code: NEFSC
+    address: NOAA, National Marine Fisheries Service, Northeast Fisheries Science 
+             Center, 166 Water Street, Woods Hole, MA 02543
+  - code: AFSC
+    address: NOAA, National Marine Fisheries Service, Alaska Fisheries Science
+             Center, 7600 Sand Point Way NE, Seattle, WA 98115
+  - code: SMAST
+    address: School for Marine Science and Technology, University of Massachusetts 
+             Dartmouth, 836 South Rodney French Blvd, New Bedford, MA 02744
+  - code: UW
+    address: School of Aquatic and Fishery Sciences, University of Washington, 
+             1122 NE Boat Street, Seattle, WA 98195
+journal: "Fisheries Research"
+date: "`r Sys.Date()`"
+bibliography: MSE_bibfile.bib
+linenumbers: true
+csl: elsevier-harvard.csl
+output: rticles::elsevier_article
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage{wrapfig}
+  - \usepackage{float}
+  - \usepackage{colortbl}
+  - \usepackage{pdflscape}
+  - \usepackage{tabu}
+  - \usepackage{threeparttable}
+  - \usepackage{threeparttablex}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{makecell}
+  - \usepackage{xcolor}
+  - \usepackage{float}
+  - \usepackage[utf8]{inputenc}
+  - \usepackage[T1]{fontenc}
+---
+
+```{r Defaults-MSE, include=FALSE}
+options(knitr.table.format = "latex")
+
+#Default Rmd options
+knitr::opts_chunk$set(echo      = FALSE,
+                      message   = FALSE,
+                      warning   = FALSE)
+
+library(knitr); library(kableExtra); library(Rpath); library(data.table)
+library(diagram)
+
+```
+\noindent
+Management Strategy Evaluation (MSE) is an effective tool to gauge the relative 
+performance of fishery management options. For the most part, MSEs have been
+applied to single-species management procedures. However, to be more inclusive 
+of all the biological and technical interactions occurring within a system,
+ecosystem-based strategies are emerging.  In order to test the feasibility of
+these strategies, a full ecosystem model should be used as an operating 
+model.  Mass balance food web models include many features that managers are
+interested in and therefore can be useful as an operating model. Until recently,
+full feedback interactions between a management strategy and a mass balance
+operating model were impractical. However, with the development of Rpath, users
+now have the ability to fully customize their mass balance models.  We developed
+new functionality for the Rpath modelling framework that allows it to be used 
+as a flexible operating model.  Using an example Georges Bank model, we show the
+ability to pause the simulation, evaluate an external model, and use the results
+to modify the parameters of the operating model.  This new flexibility will 
+allow users to test a variety of management strategies or couple to other models
+making Rpath a valuable tool for conducting MSEs.
+  
+# Introduction
+
+Successful management occurs when effective management strategies are applied to achieve a goal.  This can be difficult especially for managing natural living resources because of great uncertainty in the process.  Uncertainty can arise from various aspects throughout the process from natural variability inherent in the ecosystem to model and parameter uncertainty and implementation uncertainty.  An effective tool to understand the consequences of uncertainty is Management Strategy Evaluation [MSE: @smith_MSE_1994; @butterworth_management_procedures_2007; @punt_MSE_best_2016]. 
+
+Management Strategy Evaluations are at their core a closed loop simulation that address trade-offs inherent in the system.  MSEs accomplish this through two key components: an operating model and a management procedure [@butterworth_experiences_1999; @smith_MSE_1999; @punt_MSE_best_2016].  The operating model is a representation of the "truth".  A suite of operating models can attempt to account for major sources of uncertainties in the system [@smith_MSE_1999; @punt_MSE_best_2016].  Operating models must contain the biological and fishery components of the system to be analyzed as well as a simulation of how data are collected and a means to implement the results of the management procedure [@punt_MSE_best_2016].  The management strategy consists of the measurements made from the operating model, describes how these measurements are analyzed (e.g., a stock assessment model, or an empirical stock indicator), determines how the results from the assessment will be used by management (harvest control rule), and how decisions are implemented [@sainsbury_ecosys_objectives_2000].  A closed loop feedback between the management procedure and the operating model, in which the management action is simulated in the operating model during the next time step and the process is repeated, is fundamental to how an MSE operates [@punt_MSE_best_2016].    
+
+The MSE process has been used in a management context for several fisheries in South Africa and Australia and less formally in other parts of the world [@punt_MSE_best_2016].  There has been extensive MSE work conducted by the International Whaling Commission [@butterworth_experiences_1999].  Unlike traditional approaches to management, this process can allow managers to focus on long-term trade-offs instead of just short-term outcomes [@butterworth_management_procedures_2007].  Unfortunately MSEs have had limited implementation in Europe and North America with regards to actual living marine resource management [@punt_MSE_best_2016].  Regardless of whether MSEs are being conducted for direct management actions or as part of an academic exercise, they tend to focus on single species issues.  
+
+However, there is a growing desire to test management strategies in an ecosystem context. Many of the high-level policies that drive living resource management call for ecosystem objectives [@sainsbury_ecosys_objectives_2000].  Managers and stakeholders recognize that there are technical and biological interactions and trade-offs that are not always accounted for in single species management [@link_EBFM_2010]. Within the context of MSE, there have been several different approaches to dealing with these issues.  The first is to use models of intermediate complexity [MICE; @plaganyi_MICE_2014].  MICE models focus only on components of the ecosystem directly related to the management procedure.  Another method has been to patch together outputs from various different models [e.g. @dichmont_spatial_MSE_2013].  Both of these methods fail to capture all of the dynamics of the system and potential indirect effects of management options.  To better address ecosystem objectives, a full ecosystem model needs to be used which integrates all parts of the system in one place [@fulton_EBFM_MSE_2014].  
+
+A mass balance food web model can serve this purpose.  Mass balance models characterize the flow of energy through a system.  This approach has been popularized by the software package Ecopath with Ecosim [@christensen_ecopath_1992; @walters_ecosim_1997; @christensen_ecopath_2004]. These types of models are valuable for exploring management strategies because they can evaluate the direct and indirect effects of fishing or environmental changes [@plaganyi_models_2007; @fulton_approaches_2010]. Despite this, there have been few examples of using them within an MSE context. One reason may be the inability of common practitioners to manipulate the code to develop feedback between the operating model and a management strategy.  A recent study by @mackinson_EwE_MSE_2018 simulated the closed loop feedback entirely within the Ecopath with Ecosim software.  This required building the management strategy within the operating model itself.  
+
+An alternative to the Ecopath with Ecosim software is the R implementation of the mass balance algorithms called Rpath [@lucey_Rpath_2020].  This version gives users the ability to fully customize their model.  Here we demonstrate a new tool developed for Rpath that will allow a mass balance model to serve as a flexible operating model.  The new function called *rsim.step* allows a user to pause the operating model to extract data and evaluate an external model.  The results of which can be used to adjust the parameters of the operating model before the next iteration creating a true closed loop simulation. We apply this approach to a simple, highly aggregated Ecopath model of Georges Bank [@link_EMAX_2006].  
+
+# Methods
+
+## New Rpath functionality
+
+Rpath is an R implementation of the mass balance algorithms designed to work with fisheries data sources.  In general, mass balance is achieved by accounting for all of the production for a given species group by their consumption by species groups which can be described as a set of linear equations [See @lucey_Rpath_2020 for equations].  Consumption must also include losses due to respiration and non-assimilated food.  This static description of the system can then be used as the initial conditions for a dynamic simulation over time [@lucey_Rpath_2020; @walters_ecosim_1997].
+
+In the base functionality of Rpath dynamic simulations are carried out in a three-step process collectively called *Rsim*.  First, a scenario is initialized using the *rsim.scenario* function.  This carries over the relevant parameters from the mass balance function *rpath* for the initial state.  Next, users can adjust parameters or provide forcing functions that will affect how species groups react within the model.  Finally, the function *rsim.run* is called to execute the simulation and provide outputs.  
+
+To extend the usefulness of the modelling framework to serve as an operating model we developed a new function called *rsim.step*.  This function uses the output of a previous rsim run and appends new output to the end.  In order for this to work we modified the *Rcpp* [@eddelbuettel_rcpp_2011] code underlying the *rsim.run* function to include the output of the final derivatives for the last time step from the function call so that they can be applied to the next time step.  This generates a new work flow (Figure \ref{fig:Concept}) where a scenario is still first parameterized using *rsim.scenario*, adjustments can be made, and then an initial burn-in period is run using *rsim.run*.  This must be at least one full time step.  From there external models can be evaluated, the results of which can be used to adjust parameters of the rsim run before moving forward with the simulation using *rsim.step*.  Note that the simulation does not need to be paused after every time step but for this example we did.  The following sections describes in detail the simulations that were run to demonstrate this new feature of Rpath.
+
+```{r, fig.cap = "\\label{fig:Concept} Schematic of how Rpath can be used as an operating model.  The initial pathway is similar to how dynamic simulations would normally be run in Rpath.  The closed loop pathway exports observed data from the operating model and passes it to an assessment model (in this case a surplus production model).  The management procedure compares the outputs from the assessment model to a harvest control rule and determines what the new fishing parameters should be.  The adjustment function changes the parameters in the operating model and the loop is run again."}
+par(mar = rep(1, 4))
+openplotmat(main = '')
+pos <- coordinates(c(5, 5, 5, 5, 5))
+
+#Arrows
+apos <- 0.65
+#Boxes
+text_size <- 0.7
+edge      <- 0.06
+
+#Colors
+big.col <- 'light grey'
+fun.col <- 'grey'
+obj.col <- 'white'
+
+#Operating model
+textrect(mid = pos[8, ],  radx = edge + 0.44, rady = edge + 0.24, shadow.size = 0, 
+         box.col = big.col)
+textempty(mid = pos[1, ] + c(0.1, 0), lab = 'Operating Model', box.col = big.col, cex = 1.3)
+#Initial pathway
+straightarrow(from = pos[3, ], to = pos[8, ], arr.pos = apos, lty = 2)
+straightarrow(from = pos[8, ], to = pos[13, ], arr.pos = apos, lty = 2)
+straightarrow(from = pos[13, ], to = pos[14, ], arr.pos = apos, lty = 2)
+straightarrow(from = pos[14, ], to = pos[15, ], arr.pos = apos, lty = 2)
+#Remaining pathways
+straightarrow(from = pos[8, ], to = pos[9, ], arr.pos = apos)
+straightarrow(from = pos[10, ], to = pos[15, ], arr.pos = apos)
+straightarrow(from = pos[9, ] + c(0, 0.02), to = pos[10, ] + c(0, 0.02), arr.pos = apos)
+straightarrow(from = pos[10, ] - c(0, 0.02), to = pos[9, ] - c(0, 0.02), arr.pos = apos)
+bentarrow (from = pos[11, ],  to = pos[8, ], path = 'V', arr.side = 2)
+
+#Assessment model
+textrect(mid = pos[18, ] - c(0, 0.02),  radx = edge + 0.44, rady = edge + 0.045, shadow.size = 0, 
+         box.col = big.col)
+textempty(mid = pos[21, ] + c(0.1, 0.11), lab = 'Management Strategy', box.col = big.col, cex = 1.3)
+#pathways
+straightarrow(from = pos[15, ], to = pos[20, ], arr.pos = apos)
+straightarrow(from = pos[20, ], to = pos[19, ], arr.pos = apos)
+straightarrow(from = pos[19, ], to = pos[18, ], arr.pos = apos)
+straightarrow(from = pos[18, ], to = pos[17, ], arr.pos = apos)
+straightarrow(from = pos[17, ], to = pos[16, ], arr.pos = apos)
+straightarrow(from = pos[16, ], to = pos[11, ], arr.pos = apos)
+
+#Boxes
+#operating model
+textrect(mid = pos[3, ],  radx = edge, rady = edge, lab = 'rsim.scenario', 
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textrect(mid = pos[9, ],  radx = edge, rady = edge, lab = 'rsim.step', 
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textrect(mid = pos[13, ],  radx = edge, rady = edge, lab = 'rsim.run',   
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textrect(mid = pos[15, ], radx = edge, rady = edge, lab = 'GenData',  
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textrect(mid = pos[11, ], radx = edge, rady = edge, lab = 'Adjust.fishing',  
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textround(mid = pos[8, ], radx = edge - .07, rady = edge, lab = 'Scenario', cex = text_size, 
+          shadow.size = 0, box.col = obj.col)
+textround(mid = pos[10, ], radx = edge - .07, rady = edge, lab = 'rsim obj', cex = text_size, 
+          shadow.size = 0, box.col = obj.col)
+textround(mid = pos[14, ], radx = edge - .07, rady = edge, lab = 'rsim obj', cex = text_size, 
+          shadow.size = 0, box.col = obj.col)
+
+#assessment model
+textrect(mid = pos[17, ], radx = edge, rady = edge, lab = 'HCR',
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textrect(mid = pos[19, ], radx = edge, rady = edge, lab = 'ProdMod',
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+textround(mid = pos[20, ], radx = edge - .07, rady = edge, lab = 'Obs', cex = text_size, 
+          shadow.size = 0, box.col = obj.col)
+textround(mid = pos[18, ], radx = edge - .07, rady = edge, lab = 'Ref Points', cex = text_size, 
+          shadow.size = 0, box.col = obj.col)
+textround(mid = pos[16, ], radx = edge - .07, rady = edge, lab = 'New Effort', cex = text_size, 
+          shadow.size = 0, box.col = obj.col)
+
+#Legend
+straightarrow(from = pos[21, ] - c(0.08, 0), to = pos[21, ], lty = 3, arr.pos = 1)
+straightarrow(from = pos[22, ] - c(0.08, 0), to = pos[22, ], lty = 1, arr.pos = 1)
+textempty(mid = pos[21, ], lab = 'initial \npathway', cex = text_size)
+textempty(mid = pos[22, ], lab = 'closed loop \npathway', cex = text_size)
+textround(mid = pos[24, ], radx = 0.01, rady = 0.04, lab = 'object',
+          cex = text_size, shadow.size = 0, box.col = obj.col)
+textrect(mid = pos[25, ], radx = 0.04, rady = 0.04, lab = 'function',
+         cex = text_size, shadow.size = 0, box.col = fun.col)
+```
+
+### Georges Bank model
+
+Our simulated MSE was conducted using an Rpath version of the @link_EMAX_2006 Ecopath model of Georges Bank.  Georges Bank is a highly productive submarine plateau located due east of Cape Cod, Massachusetts.  @link_EMAX_2006 developed a mass balance model for the bank ecosystem as part of their Energy Modeling and Analysis eXercise (EMAX).  The mass balance for Georges Bank was parameterized for both Ecopath and EcoNetwrk [@ulanowicz_econetwrk_1991].  The model is highly aggregated with 29 species groups, two detrital groups, and one fishery (Figure \ref{fig:Georges Bank}).  We imported the parameters from the Ecopath version into the R package Rpath. 
+
+The EMAX work was intended to represent the flow of energy through the system and was not run dynamically.  Therefore, the model needed to be modify slightly from the published parameterization to avoid unstable dynamics during simulations.  For example,  the parameterization of detrital fate needed to be revised to avoid instability.  The published version of EMAX had a portion of all production going into discards.  This created an unrealistic amount of discards in the system.  In turn, species that rely on discards as a portion of their diet had an unlimited food supply, creating cycles of boom and bust throughout the food web.  To remove this instability, we set the detrital fate of all species groups to 1 for *Detritus-POC* and 0 for *Discard*.  To ensure that those species that did rely on discards for their diet still had adequate food supply, we switched the diet composition for *Discard* to *Import*, a category that typically represents food that is obtained outside the system and remains as a constant source in the diet. This change is reflected in Figure \ref{fig:Georges Bank} as no lines connected with the *Discard* node.  We also adjusted diet compositions of dominate prey groups by +/- 0.001 for several groups to achieve a sum of one.
+ 
+```{r Georges Bank model}
+#Georges Bank - EMAX (modified)
+GB.groups <- c('Phytoplankton- Primary Producers', 'Bacteria', 'Microzooplankton',
+               'Small copepods', 'Large Copepods', 'Gelatinous Zooplankton', 
+               'Micronekton', 'Mesopelagics', 'Macrobenthos- polychaetes', 
+               'Macrobenthos- crustaceans', 'Macrobenthos- molluscs', 
+               'Macrobenthos- other', 'Megabenthos- filterers', 'Megabenthos- other',
+               'Shrimp et al.', 'Larval-juv fish- all', 'Small Pelagics- commercial',
+               'Small Pelagics- other', 'Small Pelagics- squid', 
+               'Small Pelagics- anadromous', 'Medium Pelagics- (piscivores & other)',
+               'Demersals- benthivores', 'Demersals- omnivores', 
+               'Demersals- piscivores', 'Sharks- pelagics', 'HMS', 'Baleen Whales',
+               'Odontocetes', 'Sea Birds', 'Discard', 'Detritus-POC', 'Fishery')
+types <- c(1, rep(0, 28), rep(2, 2), 3)
+
+GB.params <- create.rpath.params(GB.groups, types)
+
+GB.params$model$Biomass <- c(25.70472, 6.517908, 5.587981, 12.98514, 6.980794,
+                             1.319463, 3.805126, 0.045, 11.40272, 10.87353,
+                             9.8865, 40.02257, 3.613779, 3.965064, 0.09, 
+                             0.6293996, 14.97737, 1.0737, 1.262162, 0.25,
+                             0.2915301, 4.576176, 3.438957, 2.244675, 0.04334066,
+                             0.025, 0.4167178, 0.1127281, 0.003496863,
+                             NA, NA, NA)
+
+GB.params$model$PB <- c(166.1342, 91.24998, 72.00002, 41.66504, 54.63586, 
+                        40, 14.25, 0.9503762, 2.5, 3, 2, 2, 5, 2, 2, 15, 
+                        0.3452712, 0.9571092, 0.9503762, 0.4249809, 0.459,
+                        0.45, 0.45, 0.486, 0.102, 0.02, 0.03802086,
+                        0.04, 0.275, NA, NA, NA)
+
+GB.params$model$QB <- c(NA, 38.02082, 24.24243, 12.775, 10.95, 14.308, 36.5,
+                        1.825, 17.5, 21, 14, 17.64, 18, 18, 5, 45, 2, 2,
+                        2.75, 2, 2.3814, 0.92, 0.83, 2.205567, 0.5328019,
+                        2.053014, 4.5, 13.82976, 4.379231, NA, NA, NA)
+
+GB.params$model$BioAcc <- c(rep(0, 31), NA)
+
+GB.params$model$Unassim <- c(0, rep(0.2, 28), 0, 0, NA)
+
+GB.params$model$Discard <- c(rep(0, 31), 1)
+
+GB.params$model$'Detritus-POC' <- c(rep(1, 29), rep(0, 3))
+
+GB.params$model$Fishery <- c(rep(0, 11), 0.6478018, 0.03305462, 0, 0.00022901,
+                             0.2990043, 0, 0.003389353, 0.03275818, 0.01015249,
+                             0.1, 0.005314156, 0.5314448, 0, 0.003406343, 
+                             rep(0, 6), NA)
+
+GB.params$model$Fishery.disc <- c(rep(0, 5), 6.36e-7, 0, 3.7e-12, rep(0, 4), .2,
+                                  0, 0, 4.8e-9, 0.0299, 0, 3.39e-4, 3.28e-3, 
+                                  3.05e-3, 7.92e-2, 1.59e-3, .159, 0, 
+                                  0, 1.25e-8, 1.02e-8, 0, 0, 0, NA)
+
+#Diet
+GB.params$diet[, Bacteria := c(0.24, rep(NA, 29), 0.76, NA)]
+
+GB.params$diet[, Microzooplankton := c(0.216, 0.16, 0.12, rep(NA, 27), 0.504, NA)]
+
+GB.params$diet[, 'Small copepods' := c(0.724, NA, 0.08, 0.065, rep(NA, 26), 
+                                       0.131, NA)]
+
+GB.params$diet[, 'Large Copepods' := c(0.546, NA, 0.0439, 0.174, 0.122, 0.0531, 
+                                       rep(NA, 3), 1.92e-4, NA, 1.02e-4, 
+                                       rep(NA, 18), 0.0594, NA)]
+
+GB.params$diet[, 'Gelatinous Zooplankton' := 
+                 c(0.087, 0.02, 0.051, 0.335, 0.366, 0.021, rep(NA, 9), 0.01, 
+                   0.005, 0.002, 0.00043, 0.000016, rep(NA, 10), 0.102, NA)]
+
+GB.params$diet[, Micronekton := c(0.162, NA, NA, .308, .325, NA, .041, rep(NA, 23),
+                                  0.163, NA)]
+
+GB.params$diet[, Mesopelagics := c(0.028, 0.017, 0.072, 0.34, 0.524, NA, 0.014, 
+                                   rep(NA, 23), 0.004, NA)]
+
+GB.params$diet[, 'Macrobenthos- polychaetes' := 
+                 c(0.128, 0.308, rep(NA, 6), 0.015, 9.8e-4, 5.79e-4, 3.54e-3, 
+                   3.56e-3, 1.9e-4, rep(NA, 15), 0.00593, 0.534, NA)]
+
+GB.params$diet[, 'Macrobenthos- crustaceans' :=
+                 c(0.212, 0.187, NA, 0.019, 0.037, rep(NA, 3), 0.015, 0.008, 
+                   0.008, 0.026, 0.018, 2.9e-4, rep(NA, 7), 8.5e-4, 5.1e-4, 
+                   rep(NA, 6), 0.009, 0.459, NA)]
+
+GB.params$diet[, 'Macrobenthos- molluscs' :=
+                 c(0.432, 0.199, rep(NA, 8), 0.004, 0.003, 0.013, 4.3e-4, 
+                   rep(NA, 15), 0.006, 0.342, NA)]
+
+GB.params$diet[, 'Macrobenthos- other' := 
+                 c(0.215, 0.231, rep(NA, 6), 0.017, 0.025, 0.016, 0.057, 0.006,
+                   0.003, rep(NA, 7), 8.5e-4, 4.2e-4, 2.4e-7, rep(NA, 5), 0.01,
+                   0.418, NA)]
+
+GB.params$diet[, 'Megabenthos- filterers' := c(0.69, 0.08, rep(NA, 28), 0.23, NA)]
+
+GB.params$diet[, 'Megabenthos- other' := c(NA, 0.176, rep(NA, 6), 0.078, 0.098,
+                                           0.032, 0.294, 0.048, 0.045, rep(NA, 7),
+                                           0.003, 0.002, 2.4e-7, rep(NA, 5), 0.048,
+                                           0.176, NA)]
+
+GB.params$diet[, 'Shrimp et al.' := c(0.062, 0.365, rep(NA, 4), 0.123, NA, NA, 
+                                      0.009, NA, 0.013, NA, NA, 5.4e-4, 
+                                      rep(NA, 14), 0.062, 0.365, NA)]
+
+GB.params$diet[, 'Larval-juv fish- all' := c(0.062, NA, NA, 0.456, 0.264, NA, 
+                                             0.072, NA, 0.01, 0.007, 0.005, 0.005,
+                                             rep(NA, 3), 0.055, rep(NA, 14), 
+                                             0.062, NA)]
+
+GB.params$diet[, 'Small Pelagics- commercial' :=
+                 c(0.0113, NA, NA, 0.15, 0.436, 0.0818, 0.165, NA, 0.00892, 
+                   0.0247, 0.00892, 0.0113, rep(NA, 3), 0.0963, rep(NA, 5), 
+                   9.06e-4, 9.06e-4, 0.00413, rep(NA, 8))]
+
+GB.params$diet[, 'Small Pelagics- other' :=
+                 c(0.158, NA, NA, 0.115, 0.573, 0.102, 0.042, NA, NA, 6.9e-4, 
+                   4.8e-4, 2.4e-4, rep(NA, 3), 0.007, rep(NA, 14), 0.0007, NA)]
+
+GB.params$diet[, 'Small Pelagics- squid' := 
+                 c(rep(NA, 4), 0.129, NA, 0.456, NA, NA, 0.099, NA, 0.018, NA, 
+                   NA, 0.011, 0.176, 0.016, 0.018, 0.077, 1e-4, rep(NA, 12))]
+
+GB.params$diet[, 'Small Pelagics- anadromous' := 
+                 c(0.012, NA, NA, 0.056, 0.9, NA, 0.02, NA, 4.9e-4, 0.002, 
+                   rep(NA, 5), 0.008, rep(NA, 14), 0.001, NA)]
+
+GB.params$diet[, 'Medium Pelagics- (piscivores & other)' :=
+                 c(rep(NA, 5), 0.001, NA, 0.003, NA, 0.013, NA, 0.011, 0.003, 
+                   0.018, 0.001, 0.002, 0.576, 0.044, 0.114, 0.01, 0.011, 0.098,
+                   0.014, 0.079, rep(NA, 6), 0.001, NA)]
+
+GB.params$diet[, 'Demersals- benthivores' :=
+                 c(rep(NA, 5), 0.005, 0.001, NA, 0.111, 0.13, 0.111, 0.133, 0.104,
+                   0.133, 0.006, NA, 0.11, 0.001, 0.01, NA, NA, 0.076, 0.029,
+                   0.018, rep(NA, 5), 0.011, 0.011, NA)]
+
+GB.params$diet[, 'Demersals- omnivores' :=
+                 c(rep(NA, 5), 0.006, 0.028, NA, 0.132, 0.066, 0.066, 0.066, 0.072,
+                   0.286, 0.01, 0.013, 0.132, 0.002, 0.022, NA, NA, 0.048, 0.004,
+                   0.025, rep(NA, 5), 0.011, 0.011, NA)]
+
+GB.params$diet[, 'Demersals- piscivores' :=
+                 c(rep(NA, 5), 0.026, 0.001, 0.007, 0.013, 0.013, 0.02, 0.118,
+                   0.246, 0.019, 0.012, 0.013, 0.322, 0.032, 0.015, 0.009, 0.001,
+                   0.038, 0.007, 0.086, rep(NA, 6), 0.001, NA)]
+
+GB.params$diet[, 'Sharks- pelagics' :=
+                 c(rep(NA, 4), 0.031, 0.01, NA, 0.007, NA, 0.01, NA, 0.01, 
+                   rep(NA, 4), 0.216, 0.082, 0.165, 0.001, 0.124, 0.051, 0.082,
+                   0.072, 0.014, 0.01, 0.01, 0.021, 0.031, NA, 0.051, NA)]
+
+GB.params$diet[, HMS := c(rep(NA, 5), 0.103, rep(NA, 10), 0.135, 0.741, 0.022, 
+                          rep(NA, 13))]
+
+GB.params$diet[, 'Baleen Whales' := c(rep(NA, 3), 0.059, 0.473, 0.001, 0.296, NA, 
+                                      NA, 0.059, 0.006, 0.024, NA, 0.004, NA, NA,
+                                      0.059, 0.004, 0.003, 1.3e-4, rep(NA, 10),
+                                      0.012, NA)]
+
+GB.params$diet[, Odontocetes := c(rep(NA, 5), 0.003, 0.027, rep(NA, 9), 0.379,
+                                  0.205, 0.274, 0.002, 3.2e-4, NA, 0.068, 0.04,
+                                  rep(NA, 3), 0.002, rep(NA, 4))]
+
+GB.params$diet[, 'Sea Birds' := c(rep(NA, 4), 0.034, NA, 0.137, rep(NA, 7), 0.01,
+                                  NA, 0.305, 0.263, 0.068, 0.001, 5.4e-4, NA, 
+                                  0.041, 0.013, rep(NA, 5), 0.126, NA, NA)]
+
+#DCs do not sum to one...mostly rounding errors will fix
+#Several groups need .001 to balance - will add to most dominate prey
+GB.params$diet[Group == 'Phytoplankton- Primary Producers', 
+               c('Large Copepods', 'Macrobenthos- molluscs') := 
+                 as.list(c(0.547, 0.433))]
+GB.params$diet[Group == 'Large Copepods', 
+               c('Gelatinous Zooplankton', 'Micronekton', 'Mesopelagics', 
+                 'Small Pelagics- other', 'Small Pelagics- anadromous') :=  
+                 as.list(c(0.367, 0.326, 0.525, 0.574, 0.901))]
+GB.params$diet[Group == 'Detritus-POC', 'Macrobenthos- other' := 0.419]
+GB.params$diet[Group == 'Small Pelagics- commercial', 
+               c('Medium Pelagics- (piscivores & other)',
+                 'Demersals- piscivores', 'Sea Birds') := 
+                 as.list(c(0.577, 0.323, 0.306))]
+#Larval fish and Sharks- pelagics need .002 so I added to top 2 prey
+GB.params$diet[Group == 'Small copepods', 'Larval-juv fish- all' := 0.457]
+GB.params$diet[Group == 'Large Copepods', 'Larval-juv fish- all' := 0.265]
+GB.params$diet[Group == 'Small Pelagics- commercial', 'Sharks- pelagics' := 0.217]
+GB.params$diet[Group == 'Small Pelagics- squid',      'Sharks- pelagics' := 0.166]
+#HMS has .001 too much so removed from dominate prey
+GB.params$diet[Group == 'Small Pelagics- other', 'HMS' := 0.74]
+
+#Switch discard diet to import
+na.diet <- GB.params$diet[Group == 'Import', 2:30]
+GB.params$diet[Group == 'Import', 2:30] <- GB.params$diet[Group == 'Discard', 2:30]
+GB.params$diet[Group == 'Discard', 2:30] <- na.diet
+
+#Run model
+GB <- rpath(GB.params, 'Georges Bank')
+```
+
+```{r, fig.cap="\\label{fig:Georges Bank}Food web of Georges Bank from @link_EMAX_2006"}
+par(mar = c(2, 4, 1.5, 1))
+my.groups <- c(c(30, 1, 31), c(2, 3, 4, 7, 10, 13, 5, 9, 15, 11, 12), 
+               c(6, 8, 14, 16, 18), c(27, 23, 20, 22, 19, 17),
+               c(26, 24, 29, 32), c(28, 25, 21))
+webplot(GB, labels = T, box.order = my.groups, label.cex = 0.6, fleets = T)
+```
+
+
+### Simulations
+We tested three simple management procedures to demonstrate the utility of using an ecosystem model as an operating model (Figure \ref{fig:Scenarios}). The extreme simplicity of the Georges Bank fleet structure (i.e., one fleet) was used to demonstrate multispecies technical interactions.  After initial scoping by varying fishing effort we identified a target species group (*Demersal- omnivores*) and a choke species group (*Medium Pelagics- (piscivores & other)*). For the purposes of this demonstration, the selected groups are not important and will henceforth be referred to as target and choke species.  
+
+```{r, fig.height = 6, fig.cap = "\\label{fig:Scenarios} Conceptual diagram of management strategies.  In strategy S1 fishing effort is based of the biomass reference points for the target species. Strategy S2 uses the biomass reference points for both species for whichever would result in a lower effort.  Strategy S3 is based on the biomass reference point for the target species but with a penalty for low biomass levels of the choke species.  Blue lines indicate when information for the target species is used while orange indicates the choke species."}
+
+#Generate data for plotting
+BBmsy <- seq(0, 1.5, by = 0.05)
+FFmsy <- c()
+for(i in seq_along(BBmsy)){
+    if(BBmsy[i] < 0.25) FFmsy[i] <- 0
+    if(BBmsy[i] >= 0.25 & BBmsy[i] < 0.5) FFmsy[i] <- 4 * BBmsy[i] - 1
+    if(BBmsy[i] >= 0.5) FFmsy[i] <- 1
+}
+
+B <- seq(0, 1.5, by = 0.05)
+EEtarg <- c()
+for(i in seq_along(B)){
+    if(B[i] < 0.5) EEtarg[i] <- 0.75
+    if(B[i] >= 0.5) EEtarg[i] <- 1
+}
+
+text.cex <- 1.2
+lwd.cex  <- 4
+line.break.cex <- 1
+layout(matrix(c(7, 1, 1, 8, 2, 4, 0, 3, 4, 9, 5, 6), 4, 3, byrow = T), 
+       heights = c(1.5, 1, 1, 1.5), widths = c(.25, 1, 1))
+#Strategy 1 (Omnivores - Blue, Med Pelagics - Orange)
+par(mar = c(5, 16, 2, 12))
+plot(0, 0, ylim = c(0, 1.2), xlim = c(0, 1.5), typ = 'l', axes = F, xlab = '', 
+     ylab = '')
+abline(v = 0.5, col = 'grey', lty = 3, lwd = 2)
+lines(BBmsy, FFmsy, lwd = lwd.cex, col = '#91bfdb')
+box()
+axis(1, cex.axis = 2)
+axis(2, at = c(0, 0.5, 1.0), labels = c('0.0', '0.5', '1.0'), las = T, cex.axis = 2)
+mtext(1, text = expression('B/B'['MSY']), line = 3, cex = text.cex)
+mtext(2, text = expression('F/F'['MSY']), line = 4, cex = text.cex)
+
+#Strategy 2
+par(mar = c(4, 10, 0, 2))
+plot(0, 0, ylim = c(0, 1.2), xlim = c(0, 1.5), typ = 'l', axes = F, xlab = '', 
+     ylab = '')
+abline(v = 0.5, col = 'grey', lty = 3, lwd = 2)
+lines(BBmsy, FFmsy, lwd = lwd.cex, col = '#91bfdb')
+box()
+axis(1, cex.axis = 2)
+axis(2, at = c(0, 0.5, 1.0), labels = c('0.0', '0.5', '1.0'), las = T, cex.axis = 2)
+mtext(1, text = expression('B/B'['MSY']), line = 3, cex = text.cex)
+mtext(2, text = expression('F/F'['MSY']), line = 4, cex = text.cex)
+abline(h = par('usr')[4] + 0.1, lwd = line.break.cex, xpd = NA)
+
+par(mar = c(4, 10, 0, 2))
+plot(0, 0, ylim = c(0, 1.2), xlim = c(0, 1.5), typ = 'l', axes = F, xlab = '', 
+     ylab = '')
+abline(v = 0.5, col = 'grey', lty = 3, lwd = 2)
+lines(BBmsy, FFmsy, lwd = lwd.cex, col = '#fc8d59')
+box()
+axis(1, cex.axis = 2)
+axis(2, at = c(0, 0.5, 1.0), labels = c('0.0', '0.5', '1.0'), las = T, cex.axis = 2)
+mtext(1, text = expression('B/B'['MSY']), line = 3, cex = text.cex)
+mtext(2, text = expression('F/F'['MSY']), line = 4, cex = text.cex)
+
+AB <- seq(0, 10, by = 0.5)
+par(mar = c(4, 8, 2, 2))
+plot(0, 0, ylim = c(0, 10), xlim = c(0, 10), axes = F, typ = 'n', xlab = '', 
+     ylab = '')
+abline(0, 1, lwd = lwd.cex)
+arrows(4, 4, 4, 8, lwd = lwd.cex, col = '#91bfdb')
+arrows(6, 6, 6, 2, lwd = lwd.cex, col = '#fc8d59')
+text(2, 8, labels = 'A', cex = 3)
+text(8, 2, labels = 'B', cex = 3)
+box()
+axis(1, cex.axis = 2)
+axis(2, las = T, cex.axis = 2)
+mtext(1, text = 'Effort A', line = 3, cex = text.cex)
+mtext(2, text = 'Effort B', line = 3, cex = text.cex)
+
+#Strategy 3 - reduce
+par(mar = c(4, 10, 2, 2))
+plot(0, 0, ylim = c(0, 1.2), xlim = c(0, 1.5), typ = 'l', axes = F, xlab = '', 
+     ylab = '')
+abline(v = 0.5, col = 'grey', lty = 3, lwd = 2)
+lines(BBmsy, FFmsy, lwd = lwd.cex, col = '#91bfdb')
+box()
+axis(1, cex.axis = 2)
+axis(2, at = c(0, 0.5, 1.0), labels = c('0.0', '0.5', '1.0'), las = T, cex.axis = 2)
+mtext(1, text = expression('B/B'['MSY']), line = 3, cex = text.cex)
+mtext(2, text = expression('F/F'['MSY']), line = 4, cex = text.cex)
+
+par(mar = c(4, 8, 2, 2))
+plot(0, 0, ylim = c(0, 1.2), xlim = c(0, 1.5), typ = 'l', axes = F, xlab = '', 
+     ylab = '')
+lines(c(0, 0.2),   rep(0, 2),    lwd = lwd.cex, col = '#fc8d59')
+lines(rep(0.2, 2), c(0, 0.6),    lwd = lwd.cex, col = '#fc8d59')
+lines(c(0.2, 0.5), rep(0.6, 2),  lwd = lwd.cex, col = '#fc8d59')
+lines(rep(0.5, 2), c(0.6, 1),    lwd = lwd.cex, col = '#fc8d59')
+lines(c(0.5, 1.5), rep(1, 2),    lwd = lwd.cex, col = '#fc8d59')
+box()
+axis(1, cex.axis = 2)
+axis(2, at = c(0, 0.5, 1.0), labels = c('0.0', '0.5', '1.0'), las = T, cex.axis = 2)
+mtext(1, text = expression('B/B'['init']), line = 3, cex = text.cex)
+mtext(2, text = 'Effort multiplier', line = 4, cex = text.cex)
+abline(h = par('usr')[4] + 0.2, lwd = line.break.cex, xpd = NA)
+
+#Labeling plots
+par(mar = c(0,0,0,0))
+plot(0,0, axes = F, typ = 'n')
+legend('top', legend = 'S1', bty = 'n', cex = 2.5)
+
+par(mar = c(0,0,0,0))
+plot(0,0, axes = F, typ = 'n')
+legend('top', legend = 'S2', bty = 'n', cex = 2.5)
+
+par(mar = c(0,0,0,0))
+plot(0,0, axes = F, typ = 'n')
+legend('top', legend = 'S3', bty = 'n', cex = 2.5)
+
+box('outer', lwd = 2)
+```
+
+For strategy S1, target fishing effort was a function of the biomass reference of the target species with a ramp down from a 'threshold biomass' of 0.5 B~MSY~ to a 'limit biomass' of 0.25 B~MSY~ (Figure \ref{fig:Scenarios}).  Strategy S1 is akin to setting F based on a single species assessment and ignoring technical interactions.  Strategy S2 uses both the target and choke species biomass reference points to determine target fishing effort based on whichever would result in a lower effort.  Strategy S2 represents a fishery that is occasionally limited by bycatch when the choke species is depleted.  Finally, strategy S3 determines target effort based on the biomass reference points of the target species but with a penalty for low biomass of the choke species.  The penalty is triggered if the biomass of the choke species falls below 50% of the initial biomass.  The step function for the penalty reduces fishing effort by 40% when the biomass of the choke species is between 0.5 and 0.2 of initial biomass levels and shuts down effort if the biomass falls below the 0.2 threshold.  Strategy S3 represents a fishery that is constrained by bycatch when the choke species is depleted.
+
+```{r Harvest Control Rule}
+HCR <- function(bio.ref, bmsy, fmsy, trigger = 0.5, threshold = 0.25){
+  #Calculate the shape of the curve (y = mx + b)
+  m <- (0 - 1) / (threshold - trigger)
+  b <- -1 * m * threshold
+  
+  #If at or above biomass trigger:fish at Fmsy
+  if(bio.ref >= trigger * bmsy){
+    target.f <- fmsy
+  } else {
+    #If between trigger and threshold biomass: Adjust F
+    #y value is f/fmsy so need to multiple by fmsy to get f
+    target.f <- (m * (bio.ref / bmsy) + b) * fmsy
+  }
+  #If below threshold: No fishing allowed
+  if(bio.ref < threshold * bmsy) target.f <- 0
+  
+  return(target.f)
+}
+```
+
+Each management procedure was simulated 100 times for 100 years.  The simulation was paused every year so that observations could be drawn from the operating model.  Observations were made by adding log-normal observation error to the true biomass values in the model correcting for bias using the following equation:
+
+\begin{equation}
+  \label{survey}
+  B_{Obs,i} = B_i \cdot e^{\epsilon_t - \frac{\sigma^2}{2}}, \textnormal{where } \epsilon_t \approx N(0, \sigma^2)
+\end{equation}
+
+\noindent where $B_{Obs,i}$ is the observed biomass based on $B_i$ the biomass from the operating model and $\epsilon_t$ the log-normal observation error. This error term is normally distributed with a mean of zero and variance $\sigma^2$. Bias is corrected using the $\sigma^2/2$ term.
+
+```{r Generate Data}
+GenData <- function(Rsim.output, group, sim.year, Sigma = 0.3, bias = 1, freq = 1){
+  # This routine generates data (unbiased generally) for the biological groups 
+  #and returns the appropriate object
+  
+  node     <- extract.node(Rsim.output, group)
+  TrueBio  <- node$AnnualBiomass[sim.year]
+  Observed <- c()
+  for(Iyear in seq_along(sim.year)){
+    if (Iyear %% freq == 0){
+      Observed[Iyear] <- TrueBio[Iyear] * exp(rnorm(1, 0, Sigma) - Sigma^2/2)
+    } else Observed[Iyear] <- -1
+  }
+  Catch <- as.numeric(node$AnnualTotalCatch[sim.year])
+  
+  out <- list(ObsBio = Observed, TotCatch = Catch, Fmort = Catch / Observed)
+  
+  return(out)
+} 
+```
+
+Every fifth year of the simulation a simple assessment was conducted.  First the annual surplus production (ASP) was calculated as:
+
+\begin{equation}
+  \label{surplus}
+  ASP_{i,t} = B_{Obs,i,t-1} - B_{Obs,i,t} - C_{i,t}  
+\end{equation}
+
+\noindent where $B$ is the biomass at either time *t* or the previous time step *t-1*, and $C_t$ the catch at time *t*.  A surplus production model was then fit using a quadratic function of biomass (Graham-Schaefer functional form with additive error; e.g. @quinn_quantitative_1999) given by:
+
+\begin{equation}
+  \label{Schaefer}
+  ASP_{i,t} = \alpha B_{Obs,i,t} + \beta B_{Obs,i,t}^2 + \epsilon_t
+\end{equation}
+
+\noindent where $\alpha$ and $\beta$ are regression parameters that were estimated using the function *lm* which fits linear models in R (v  3.6.0, R Foundation for Statistical Computing).  Biological reference points were calculated directly from the surplus production model parameters as:
+
+\begin{equation}
+  \label{MSY}
+  MSY = \frac{\alpha 2}{4 \beta}
+\end{equation}
+
+\begin{equation}
+  \label{Bmsy}
+  B_{MSY} = \frac{\alpha}{2 \beta}
+\end{equation}
+
+\noindent where MSY is the maximum sustainable yield and B~MSY~ is the biomass level that supports MSY.
+
+```{r Surplus Production model}
+Prodmodel <- function(ObsBio, Catch){
+  data <- data.table(ObsBio, Catch)
+  data[, Bplus1  := shift(ObsBio, type = 'lead')]
+  data[, Surplus := Bplus1 - ObsBio + Catch]
+  data[, BB      := ObsBio ^ 2]
+  data[, prod    := Bplus1 + Catch]
+  
+  sprod <- lm(Surplus ~ 0 + ObsBio + BB, data)
+  r <- as.numeric(sprod$coeff[1])
+  K <- -1 * as.numeric(r / sprod$coeff[2])
+  MSY  <- r * K / 4
+  Bmsy <- K / 2
+  Fmsy <- r / 2
+  out  <- list(MSY = MSY, Bmsy = Bmsy, Fmsy = Fmsy, r = r, K = K)
+}
+```
+
+Current estimates of biomass were then compared to the harvest control rule specified for each strategy outlined above.  The result of which would be a target F.  Target Fs were converted to fishing effort using the equation:
+
+\begin{equation}
+  \label{label}
+  E = \frac{F}{q}
+\end{equation}
+
+\noindent where E is effort, F the fishing mortality rate, and q the catchability of the fleet.  The *rsim* dynamic simulation used in this study is based on relative effort to the initial mass balance [@lucey_Rpath_2020].  Therefore q is equal to the initial F so that initial relative effort equals one.  The new effort parameters were pushed to the operating model to be used for the next five years of projections of the operating model.
+
+In order to compare performance of management procedures, annual biomass and annual catch were averaged over the length of the simulation.  The results were then compared to known MSY and B~MSY~ values, derived by simulating the operating model over a range of fishing mortalities.  In addition, interannual variation of the catch was calculated as:
+
+\pagebreak
+
+\begin{equation}
+  \label{IAV}
+  IAV = \frac{\sqrt{(1/n - 1)\sum_{y=1}^{n-1}(C_{y+1} - C_y)^2}}{1/n\sum_{y=1}^nC_y}
+\end{equation}
+
+\noindent where $n$ is the number of years ($y$) in the simulation and $C_y$ the recommended catch summed over all species for the given year [@amar_pollock_MSE_2010].
+
+```{r IAV}
+# Interannual variation
+iav <- function(effort){
+    effort <- data.table(effort = effort)
+    n <- nrow(effort)
+    effort[, effort1 := shift(effort, type = 'lead')]
+    effort[, var := (effort1 - effort)^2]
+    output <- sqrt((1/(n - 1))*sum(effort[, var], na.rm = T)) / ((1/n)*sum(effort[, effort]))
+}
+```
+
+```{r MSY params, include= FALSE}
+#Calculate b0
+GB.scene <- rsim.scenario(GB, GB.params, 1:100)
+GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 1:100, 
+                           value = 0)
+GB.b0 <- rsim.run(GB.scene, years = 1:100, method = 'AB')
+rsim.plot(GB.b0, spname = GB.groups)
+
+GB.omnivore <- extract.node(GB.b0, 'Demersals- omnivores')
+omni.b0 <- max(GB.omnivore$AnnualBiomass)
+
+#Calculate r and K
+GB.scene <- rsim.scenario(GB, GB.params, 1:100)
+GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 1:100, 
+                           value = c(seq(1, 10, .5), seq(10, 0, -.5), rep(0, 20),
+                                     seq(0, 10, .5), seq(10, 1, -.5)))
+GB.range <- rsim.run(GB.scene, years = 1:100, method = 'AB')
+rsim.plot(GB.range, spname = GB.groups)
+
+#Omnivores
+GB.omnivore <- extract.node(GB.range, 'Demersals- omnivores')
+prod.data <- data.table(biomass = GB.omnivore$AnnualBiomass, 
+                        catch   = GB.omnivore$AnnualTotalCatch)
+prod.data[, Bplus1  := shift(biomass, type = 'lead')]
+prod.data[, Surplus := Bplus1 - biomass + catch]
+prod.data[, BB      := biomass ^ 2]
+prod.data[, prod    := Bplus1 + catch]
+
+sprod <- lm(Surplus ~ 0 + biomass + BB, prod.data)
+prod.data$pred <- c(sprod$fitted.values, 0)
+prod.data <- prod.data[1:99, ]
+setkey(prod.data, biomass)
+
+plot(prod.data$biomass, prod.data$Surplus)
+lines(prod.data$biomass, prod.data$pred, col='red')
+
+r <- as.numeric(sprod$coeff[1])
+K <- -1 * as.numeric(r / sprod$coeff[2])
+omni.MSY  <- r * K / 4
+omni.Bmsy <- K / 2
+omni.Fmsy <- r / 2
+
+#Pelagics
+GB.medpel <- extract.node(GB.range, 'Medium Pelagics- (piscivores & other)')
+prod.data <- data.table(biomass = GB.medpel$AnnualBiomass, 
+                        catch   = GB.medpel$AnnualTotalCatch)
+prod.data[, Bplus1  := shift(biomass, type = 'lead')]
+prod.data[, Surplus := Bplus1 - biomass + catch]
+prod.data[, BB      := biomass ^ 2]
+prod.data[, prod    := Bplus1 + catch]
+
+sprod <- lm(Surplus ~ 0 + biomass + BB, prod.data)
+prod.data$pred <- c(sprod$fitted.values, 0)
+prod.data <- prod.data[1:99, ]
+setkey(prod.data, biomass)
+
+plot(prod.data$biomass, prod.data$Surplus)
+lines(prod.data$biomass, prod.data$pred, col='red')
+
+r <- as.numeric(sprod$coeff[1])
+K <- -1 * as.numeric(r / sprod$coeff[2])
+medpel.MSY  <- r * K / 4
+medpel.Bmsy <- K / 2
+medpel.Fmsy <- r / 2
+```
+
+```{r S1, include= FALSE, cache = T}
+#Strategy 1 - maximize Demersals- omnivore
+set.seed(123)
+
+#Create initial scenario - burn in to genrate data to conduct initial assessment
+GB.scene <- rsim.scenario(GB, GB.params, 1:100)
+# GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 3:12, 
+#                            value = c(rep(1.5, 2), rep(2, 2), rep(1.5, 2), 
+#                                      rep(1, 2), rep(0.5, 2)))
+GB.init <- rsim.run(GB.scene, years = 1, method = 'AB')
+
+#Initial guess at Bmsy/Fmsy
+Bmsy <- 3.0
+Fmsy <- 0.3
+
+#initialize outputs
+S1.effort <- c()
+S1.omni   <- c()
+S1.medpel <- c()
+S1.iav    <- c()
+for(isim in 1:100){
+    GB.full <- copy(GB.init)
+    
+    #track changes over time
+    track.Bmsy <- Bmsy
+    track.Fmsy <- Fmsy
+    
+    #Rpath standardizes Effort = 1 so Catch = qEB simplies to C = qB so q = C/B or F
+    obs.data <- GenData(GB.full, 'Demersals- omnivores', 1)
+    q <- obs.data$Fmort[1]
+    
+    #Initial guess is to double effort to achieve an F of .3
+    newE <- 2
+    #Set new Effort
+    GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 2, 
+                               value = newE)
+    
+    #simulate years 2 through 100 with assessment every 5
+    for(Iyear in 2:100){
+        GB.full <- rsim.step(GB.scene, GB.full, method = 'AB', Iyear)
+        
+        #Survey biomass
+        new.data      <- GenData(GB.full, 'Demersals- omnivores', sim.year = Iyear)
+        obs.data$ObsBio   <- c(obs.data$ObsBio,   new.data$ObsBio)
+        obs.data$TotCatch <- c(obs.data$TotCatch, new.data$TotCatch)
+        obs.data$Fmort    <- c(obs.data$Fmort,    new.data$Fmort)
+        
+        #Run assessment every 5 years
+        if(Iyear %% 5 == 0){
+            oldE <- newE
+            assess <- Prodmodel(obs.data$ObsBio, obs.data$TotCatch)
+            Bmsy <- assess$Bmsy
+            Fmsy <- assess$Fmsy
+            track.Bmsy <- c(track.Bmsy, Bmsy)
+            track.Fmsy <- c(track.Fmsy, Fmsy)
+            
+            #Check HCR and calculate new Effort
+            ftarget <- HCR(obs.data$ObsBio[Iyear], Bmsy, Fmsy)
+            newE <- ftarget / q
+        }
+        
+        #Set new Effort
+        GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = Iyear + 1, 
+                                   value = newE)
+    } 
+    run <- copy(GB.full)
+    run.effort <- data.table(effort = GB.scene$fishing$ForcedEffort[seq(1, 1200, 12), 2], run = isim)
+    omnivore  <- extract.node(run, 'Demersals- omnivores')
+    medpel    <- extract.node(run, 'Medium Pelagics- (piscivores & other)')
+    run.omni   <- data.table(bio.obs = obs.data$ObsBio, bio.mod = omnivore$AnnualBiomass, 
+                             land = omnivore$AnnualTotalCatch, run = isim)
+    run.medpel <- data.table(bio.obs = NA,              bio.mod = medpel$AnnualBiomass,   
+                             land = medpel$AnnualTotalCatch, run = isim)
+    run.iav <- iav(omnivore$AnnualTotalCatch + medpel$AnnualTotalCatch)
+    
+    #Combine outputs
+    S1.effort <- rbindlist(list(S1.effort, run.effort))
+    S1.omni   <- rbindlist(list(S1.omni,   run.omni))
+    S1.medpel <- rbindlist(list(S1.medpel, run.medpel))
+    S1.iav    <- c(S1.iav, run.iav)
+}
+# Takes under 2 minutes
+
+# #Ecosystem indicators
+# living <- GB.params$model$Group[which(GB.params$model$Type <= 1)]
+# 
+# S1.bio <- as.data.table(S1$annual_Biomass)
+# total.biomass <- S1.bio[, rowSums(.SD), .SDcols = living]
+# S1.ecosystem <- data.table(Tot.bio = total.biomass)
+
+# #Net Primary Production
+# PPs <- which(GB.params$model$Type == 1)
+# PP.EE <- GB$EE[PPs]
+# PP.links <- which(GB.scene$params$PreyFrom == 1)
+# TPP <- S1$annual_Qlink[, PP.links]
+# S1.ecosystem[, NPP := rowSums(TPP) / PP.EE]
+# #Total consumption
+# S1.ecosystem[, TQ := rowSums(S1$annual_Qlink)]
+# #NPP:Total Biomass
+# S1.ecosystem[, NPP.TB := NPP / Tot.bio]
+# #Diversity
+# S <- GB$NUM_LIVING
+# diversity <- copy(S1.bio)
+# for(igroup in 1:S){
+#     setnames(diversity, living[igroup], 'bio.t2')
+#     diversity[, bio.t1 := shift(bio.t2, 4)]
+#     diversity[, paste0('delta_', living[igroup]) := (bio.t2 - bio.t1)/bio.t1]
+#     diversity[, paste0('prop_', living[igroup]) := bio.t2 / total.biomass]
+#     setnames(diversity, 'bio.t2', living[igroup])
+# }
+# deltas <- paste0('delta_', living)
+# props  <- paste0('prop_', living)
+# #Resilience - average change
+# diversity[, C := (1 / S) * rowSums(.SD) * 100, .SDcols = deltas]
+# S1.ecosystem[, C := diversity[, C]]
+# #remove non assessment years
+# for(iyear in 1:100){
+#     if(iyear %% 5 != 0) S1.ecosystem[iyear, C := NA]
+# }
+# #Shannon
+# diversity[, H := -1 * rowSums(.SD * log(.SD)), .SDcols = props]
+# S1.ecosystem[, H := diversity[, H]]
+# #Simpson
+# diversity[, D := 1 / rowSums(.SD^2), .SDcols = props]
+# diversity[, Ed := D / S]
+# S1.ecosystem[, D := diversity[, D]]
+# S1.ecosystem[, Ed := diversity[, Ed]]
+# #Mean Trophic Level
+# S1.catch <- as.data.table(S1$annual_Catch)
+# trophic <- as.data.table(S1.catch * GB$TL[col(S1.catch)])
+# mtlc <- rowSums(trophic) / rowSums(S1.catch)
+# S1.ecosystem[, MTLc := mtlc]
+# trophic.system <- as.data.table(S1.bio * GB$TL[col(S1.bio)])
+# mtls <- rowSums(trophic.system[, living, with = F]) / 
+#     rowSums(S1.bio[, living, with = F]) 
+#S1.ecosystem[, MTLs := mtls]
+```
+
+```{r S2, include= FALSE, cache = T}
+#Strategy 2 - set effort based on either omnivores or pelagics
+set.seed(123)
+
+#Create initial scenario - burn in to genrate data to conduct initial assessment
+GB.scene <- rsim.scenario(GB, GB.params, 1:100)
+# GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 3:12, 
+#                            value = c(rep(1.5, 2), rep(2, 2), rep(1.5, 2), 
+#                                      rep(1, 2), rep(0.5, 2)))
+GB.init <- rsim.run(GB.scene, years = 1, method = 'AB')
+
+#initialize outputs
+S2.effort <- c()
+S2.omni   <- c()
+S2.medpel <- c()
+S2.iav    <- c()
+for(isim in 1:100){
+    GB.full <- copy(GB.init)
+
+    #Initial guess at Bmsy/Fmsy
+    omni.Bmsy   <- 3.0
+    omni.Fmsy   <- 0.3
+    medpel.Bmsy <- 0.5
+    medpel.Fmsy <- 0.3
+
+    #track changes over time
+    track.Bmsy <- list(omni = omni.Bmsy, medpel = medpel.Bmsy)
+    track.Fmsy <- list(omni = omni.Fmsy, medpel = medpel.Fmsy)
+
+    #Rpath standardizes Effort = 1 so Catch = qEB simplies to C = qB so q = C/B or F
+    omni.obs.data <- GenData(GB.full, 'Demersals- omnivores', 1)
+    omni.q <- omni.obs.data$Fmort[1]
+    medpel.obs.data <- GenData(GB.full, 'Medium Pelagics- (piscivores & other)', 1)
+    medpel.q <- medpel.obs.data$Fmort[1]
+    
+    #Initial guess is to double effort to achieve an F of .3
+    newE <- 2
+    #Set new Effort
+    GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 2, 
+                               value = newE)
+    
+    #simulate years 2 through 100 with assessment every 5
+    for(Iyear in 2:100){
+        GB.full <- rsim.step(GB.scene, GB.full, method = 'AB', Iyear)
+        
+        #Survey biomass
+        omni.new.data <- GenData(GB.full, 'Demersals- omnivores', sim.year = Iyear)
+        omni.obs.data$ObsBio   <- c(omni.obs.data$ObsBio,   omni.new.data$ObsBio)
+        omni.obs.data$TotCatch <- c(omni.obs.data$TotCatch, omni.new.data$TotCatch)
+        omni.obs.data$Fmort    <- c(omni.obs.data$Fmort,    omni.new.data$Fmort)
+        
+        medpel.new.data <- GenData(GB.full, 'Medium Pelagics- (piscivores & other)', 
+                                   sim.year = Iyear)
+        medpel.obs.data$ObsBio   <- c(medpel.obs.data$ObsBio,   medpel.new.data$ObsBio)
+        medpel.obs.data$TotCatch <- c(medpel.obs.data$TotCatch, medpel.new.data$TotCatch)
+        medpel.obs.data$Fmort    <- c(medpel.obs.data$Fmort,    medpel.new.data$Fmort)
+        
+        #Run assessment every 5 years
+        if(Iyear %% 5 == 0){
+            oldE <- newE
+            omni.assess <- Prodmodel(omni.obs.data$ObsBio, omni.obs.data$TotCatch)
+            omni.Bmsy <- omni.assess$Bmsy
+            omni.Fmsy <- omni.assess$Fmsy
+            track.Bmsy$omni <- c(track.Bmsy$omni, omni.Bmsy)
+            track.Fmsy$omni <- c(track.Fmsy$omni, omni.Fmsy)
+            
+            medpel.assess <- Prodmodel(medpel.obs.data$ObsBio, medpel.obs.data$TotCatch)
+            medpel.Bmsy <- medpel.assess$Bmsy
+            medpel.Fmsy <- medpel.assess$Fmsy
+            track.Bmsy$medpel <- c(track.Bmsy$medpel, medpel.Bmsy)
+            track.Fmsy$medpel <- c(track.Fmsy$medpel, medpel.Fmsy)
+            
+            #Check HCR and calculate new Effort
+            omni.ftarget <- HCR(omni.obs.data$ObsBio[Iyear], omni.Bmsy, omni.Fmsy)
+            omniE <- omni.ftarget / omni.q
+            
+            medpel.ftarget <- HCR(medpel.obs.data$ObsBio[Iyear], medpel.Bmsy, medpel.Fmsy)
+            medpelE <- medpel.ftarget / medpel.q
+            
+            newE <- min(omniE, medpelE)
+            if(newE < 0) newE <- 0
+        }
+        
+        #Set new Effort
+        GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = Iyear + 1, 
+                                   value = newE)
+    }
+    run <- copy(GB.full)
+    run.effort <- data.table(effort = GB.scene$fishing$ForcedEffort[seq(1, 1200, 12), 2], run = isim)
+    omnivore  <- extract.node(run, 'Demersals- omnivores')
+    medpel    <- extract.node(run, 'Medium Pelagics- (piscivores & other)')
+    run.omni   <- data.table(bio.obs = omni.obs.data$ObsBio, bio.mod = omnivore$AnnualBiomass, 
+                             land = omnivore$AnnualTotalCatch, run = isim)
+    run.medpel <- data.table(bio.obs = medpel.obs.data$ObsBio, bio.mod = medpel$AnnualBiomass, 
+                             land = medpel$AnnualTotalCatch, run = isim)
+    run.iav <- iav(omnivore$AnnualTotalCatch + medpel$AnnualTotalCatch)
+    
+    #Combine outputs
+    S2.effort <- rbindlist(list(S2.effort, run.effort))
+    S2.omni   <- rbindlist(list(S2.omni,   run.omni))
+    S2.medpel <- rbindlist(list(S2.medpel, run.medpel))
+    S2.iav <- c(S2.iav, run.iav)
+}
+```
+
+```{r S3, include= FALSE, cache = T}
+#Strategy 3 - maximize omnivores with protection for pelagics
+set.seed(123)
+
+#Create initial scenario - burn in to genrate data to conduct initial assessment
+GB.scene <- rsim.scenario(GB, GB.params, 1:100)
+# GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 3:12, 
+#                            value = c(rep(1.5, 2), rep(2, 2), rep(1.5, 2), 
+#                                      rep(1, 2), rep(0.5, 2)))
+GB.init <- rsim.run(GB.scene, years = 1, method = 'AB')
+
+#initialize outputs
+S3.effort <- c()
+S3.omni   <- c()
+S3.medpel <- c()
+S3.iav    <- c()
+for(isim in 1:100){
+    GB.full <- copy(GB.init)
+
+    #Initial guess at Bmsy/Fmsy
+    Bmsy <- 3
+    Fmsy <- .3
+    #track changes over time
+    track.Bmsy <- Bmsy
+    track.Fmsy <- Fmsy
+    
+    #Rpath standardizes Effort = 1 so Catch = qEB simplies to C = qB so q = C/B or F
+    obs.data <- GenData(GB.full, 'Demersals- omnivores', 1)
+    q <- obs.data$Fmort[1]
+    
+    #Initial guess is to double effort to achieve an F of .3
+    newE <- 2
+    #Set new Effort
+    GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = 2, 
+                               value = newE)
+    
+    #Get initial Medium Pelagic biomass
+    medpel.data <- GenData(GB.full, 'Medium Pelagics- (piscivores & other)', 
+                           sim.year = 1)
+    medpel.init.bio <- medpel.data$ObsBio
+    medpel.obs <- medpel.init.bio
+    
+    #simulate years 2 through 100 with assessment every 5
+    for(Iyear in 2:100){
+        GB.full <- rsim.step(GB.scene, GB.full, method = 'AB', Iyear)
+        
+        #Survey biomass
+        new.data      <- GenData(GB.full, 'Demersals- omnivores', sim.year = Iyear)
+        obs.data$ObsBio   <- c(obs.data$ObsBio,   new.data$ObsBio)
+        obs.data$TotCatch <- c(obs.data$TotCatch, new.data$TotCatch)
+        obs.data$Fmort    <- c(obs.data$Fmort,    new.data$Fmort)
+        medpel.obs <- c(medpel.obs, NA)
+        
+        #Run assessment every 5 years
+        if(Iyear %% 5 == 0){
+            oldE <- newE
+            assess <- Prodmodel(obs.data$ObsBio, obs.data$TotCatch)
+            Bmsy <- assess$Bmsy
+            Fmsy <- assess$Fmsy
+            track.Bmsy <- c(track.Bmsy, Bmsy)
+            track.Fmsy <- c(track.Fmsy, Fmsy)
+            
+            #Check HCR and calculate new Effort
+            ftarget <- HCR(obs.data$ObsBio[Iyear], Bmsy, Fmsy)
+            newE <- ftarget / q
+            
+            #Add protection for Medium Pelagics - reduce effort by 40%
+            medpel.data <- GenData(GB.full, 'Medium Pelagics- (piscivores & other)', 
+                                   sim.year = Iyear)
+            medpel.obs[Iyear] <- medpel.data$ObsBio
+            if(medpel.data$ObsBio >= 0.2 * medpel.init.bio & 
+               medpel.data$ObsBio < 0.5 * medpel.init.bio) newE <- 0.6 * oldE
+            if(medpel.data$ObsBio < 0.2 * medpel.init.bio) newE <- 0
+        
+            if(newE < 0) newE <- 0
+            }
+        
+        #Set new Effort
+        GB.scene <- adjust.fishing(GB.scene, 'ForcedEffort', 'Fishery', sim.year = Iyear + 1, 
+                                   value = newE)
+    }
+    run <- copy(GB.full)
+    run.effort <- data.table(effort = GB.scene$fishing$ForcedEffort[seq(1, 1200, 12), 2], run = isim)
+    omnivore  <- extract.node(run, 'Demersals- omnivores')
+    medpel    <- extract.node(run, 'Medium Pelagics- (piscivores & other)')
+    run.omni   <- data.table(bio.obs = obs.data$ObsBio, bio.mod = omnivore$AnnualBiomass, 
+                             land = omnivore$AnnualTotalCatch, run = isim)
+    run.medpel <- data.table(bio.obs = medpel.obs, bio.mod = medpel$AnnualBiomass,   
+                             land = medpel$AnnualTotalCatch, run = isim)
+    run.iav <- iav(omnivore$AnnualTotalCatch + medpel$AnnualTotalCatch)
+    
+    #Combine outputs
+    S3.effort <- rbindlist(list(S3.effort, run.effort))
+    S3.omni   <- rbindlist(list(S3.omni,   run.omni))
+    S3.medpel <- rbindlist(list(S3.medpel, run.medpel))
+    S3.iav <- c(S3.iav, run.iav)
+}
+```
+
+```{r compile results}
+#Average results
+S1.effort.10 <- c()
+S2.effort.10 <- c()
+S3.effort.10 <- c()
+for(irun in 1:10){
+    effort.s1    <- matrix(S1.effort[run == irun, effort], 100, 1)
+    S1.effort.10 <- cbind(S1.effort.10, effort.s1)
+    effort.s2    <- matrix(S2.effort[run == irun, effort], 100, 1)
+    S2.effort.10 <- cbind(S2.effort.10, effort.s2)
+    effort.s3    <- matrix(S3.effort[run == irun, effort], 100, 1)
+    S3.effort.10 <- cbind(S3.effort.10, effort.s3)
+}
+
+S1.biomass.omni   <- S1.omni[,   list(mean = mean(bio.mod), var = sd(bio.mod)), by = run]
+S1.landing.omni   <- S1.omni[,   list(mean = mean(land),    var = sd(land)),    by = run]
+S1.biomass.medpel <- S1.medpel[, list(mean = mean(bio.mod), var = sd(bio.mod)), by = run]
+S1.landing.medpel <- S1.medpel[, list(mean = mean(land),    var = sd(land)),    by = run]
+
+S2.biomass.omni   <- S2.omni[,   list(mean = mean(bio.mod), var = sd(bio.mod)), by = run]
+S2.landing.omni   <- S2.omni[,   list(mean = mean(land),    var = sd(land)),    by = run]
+S2.biomass.medpel <- S2.medpel[, list(mean = mean(bio.mod), var = sd(bio.mod)), by = run]
+S2.landing.medpel <- S2.medpel[, list(mean = mean(land),    var = sd(land)),    by = run]
+
+S3.biomass.omni   <- S3.omni[,   list(mean = mean(bio.mod), var = sd(bio.mod)), by = run]
+S3.landing.omni   <- S3.omni[,   list(mean = mean(land),    var = sd(land)),    by = run]
+S3.biomass.medpel <- S3.medpel[, list(mean = mean(bio.mod), var = sd(bio.mod)), by = run]
+S3.landing.medpel <- S3.medpel[, list(mean = mean(land),    var = sd(land)),    by = run]
+
+outplot <- data.table(omni.BBmsy      = c(mean(S1.biomass.omni[, mean]) / omni.Bmsy,
+                                          mean(S2.biomass.omni[, mean]) / omni.Bmsy,
+                                          mean(S3.biomass.omni[, mean]) / omni.Bmsy),
+                      omni.BBmsy.sd   = c(sd(S1.biomass.omni[, mean]) / omni.Bmsy,
+                                          sd(S2.biomass.omni[, mean]) / omni.Bmsy,
+                                          sd(S3.biomass.omni[, mean]) / omni.Bmsy),
+                      medpel.BBmsy    = c(mean(S1.biomass.medpel[, mean]) / medpel.Bmsy,
+                                          mean(S2.biomass.medpel[, mean]) / medpel.Bmsy,
+                                          mean(S3.biomass.medpel[, mean]) / medpel.Bmsy),
+                      medpel.BBmsy.sd = c(sd(S1.biomass.medpel[, mean]) / medpel.Bmsy,
+                                          sd(S2.biomass.medpel[, mean]) / medpel.Bmsy,
+                                          sd(S3.biomass.medpel[, mean]) / medpel.Bmsy),
+                      omni.CMSY       = c(mean(S1.landing.omni[, mean]) / omni.MSY,
+                                          mean(S2.landing.omni[, mean]) / omni.MSY,
+                                          mean(S3.landing.omni[, mean]) / omni.MSY),
+                      omni.CMSY.sd    = c(sd(S1.landing.omni[, mean]) / omni.MSY,
+                                          sd(S2.landing.omni[, mean]) / omni.MSY,
+                                          sd(S3.landing.omni[, mean]) / omni.MSY),
+                      medpel.CMSY     = c(mean(S1.landing.medpel[, mean]) / medpel.MSY,
+                                          mean(S2.landing.medpel[, mean]) / medpel.MSY,
+                                          mean(S3.landing.medpel[, mean]) / medpel.MSY),
+                      medpel.CMSY.sd  = c(sd(S1.landing.medpel[, mean]) / medpel.MSY,
+                                          sd(S2.landing.medpel[, mean]) / medpel.MSY,
+                                          sd(S3.landing.medpel[, mean]) / medpel.MSY))
+```
+
+```{r, fig.cap = '\\label{fig:biomass} Example biomass output from the operating model (Model) and the generated "observed" data used by the assessment model for one simulation of each strategy.  The top row is strategy S1 where the assessment only used observations from the target species.  The middle row is strategy S2 where effort was based on the lower of the two assessments.  Finally the bottom row is strategy S3 where the assessment used the target species with effort penalties based on the choke species biomass.'}
+par(mfrow = c(3, 2), mar = c(0,0,0,0), oma = c(4, 8, 2, 8))
+
+#S1
+plot(S1.omni[run == 1, bio.mod], typ = 'l', col = 'red', ylim = c(0, 5), axes = F)
+points(S1.omni[run == 1, bio.obs])
+axis(2, las = T)
+box()
+mtext(3, text = 'Target Species')
+
+plot(S1.medpel[run == 1, bio.mod], typ = 'l', col = 'red', ylim = c(0, 1), axes = F)
+axis(4, las = T)
+box()
+mtext(3, text = 'Choke Species')
+legend('topright', legend = c('Model', 'Observations', 'Threshold'), bty = 'n', 
+       lty = c(1, 0, 2), col = c('red', 'black', 'grey'), pch = c(NA, 1, NA))
+
+#S2
+plot(S2.omni[run == 1, bio.mod], typ = 'l', col = 'red', ylim = c(0, 5), axes = F)
+points(S2.omni[run == 1, bio.obs])
+axis(2, las = T)
+axis(3, lab = F, tick = -.02)
+box()
+
+plot(S2.medpel[run == 1, bio.mod], typ = 'l', col = 'red', ylim = c(0, 1), axes = F)
+points(S2.medpel[run == 1, bio.obs])
+axis(4, las = T)
+axis(3, lab = F, tick = -.02)
+box()
+
+#S3
+plot(S3.omni[run == 1, bio.mod], typ = 'l', col = 'red', ylim = c(0, 5), axes = F)
+points(S3.omni[run == 1, bio.obs])
+axis(2, las = T)
+axis(3, lab = F, tick = -.02)
+axis(1)
+box()
+
+plot(S3.medpel[run == 1, bio.mod], typ = 'l', col = 'red', ylim = c(0, 1), axes = F)
+points(S3.medpel[run == 1, bio.obs])
+abline(h = medpel.init.bio * .5, lty = 2, col = 'grey')
+abline(h = medpel.init.bio * 0.2, lty = 2, col = 'grey')
+axis(4, las = T)
+axis(3, lab = F, tick = -.02)
+axis(1)
+box()
+
+mtext(2, text = expression('Biomass t km'^-2), outer = T, line = 3.5)
+mtext(1, text = 'Simulated Year', outer = T, line = 2.5)
+```
+
+## Results
+
+Modifications made to the Rpath function *rsim.run* and the new function *rsim.step* worked as designed.  Observations generated from the operating model were used by the surplus production model to estimate biological reference points (Figure \ref{fig:biomass}).  These reference points informed harvest control rules that dictated the fishing effort implemented by the operating model in subsequent time steps.  These modifications allow Rpath to serve as intended as an operating model.
+
+```{r, fig.cap = "\\label{fig:effort} Effort levels from the three scenarios"}
+#Effort - Figure 3--------------------------------------------------------------
+s.colors <- c('#66c2a5', '#fc8d62', '#8da0cb')
+
+par(mfrow = c(1, 3), mar = c(0, 0, 0, 0), oma = c(4, 7, 2, 2))
+
+#Strategy 1
+plot(0, 0, ylim = c(0, 4.5), xlim = c(0, 100), typ = 'n', axes = F, xlab = '', 
+     ylab = '')
+lines(S1.effort[run == 1, effort], lwd = 3, col = s.colors[1])
+box()
+x.label <- c('', axTicks(1)[2:length(axTicks(1))])
+axis(1, cex.axis = 2, at = axTicks(1), labels = x.label)
+axis(2, las= T, cex.axis = 2)
+text(80, 4.4, labels = 'S1', cex = 2.5)
+
+#Strategy 2
+plot(0, 0, ylim = c(0, 4.5), xlim = c(0, 100), typ = 'n', axes = F, xlab = '', 
+     ylab = '')
+lines(S2.effort[run == 1, effort], lwd = 3, col = s.colors[2])
+box()
+axis(1, cex.axis = 2, at = axTicks(1), labels = x.label)
+text(80, 4.4, labels = 'S2', cex = 2.5)
+
+#Strategy 3
+plot(0, 0, ylim = c(0, 4.5), xlim = c(0, 100), typ = 'n', axes = F, xlab = '', 
+     ylab = '')
+lines(S3.effort[run == 1, effort], lwd = 3, col = s.colors[3])
+box()
+axis(1, cex.axis = 2, at = axTicks(1), labels = x.label)
+text(80, 4.4, labels = 'S3', cex = 2.5)
+
+mtext(1, text = 'Simulation Year', line = 3, outer = T, cex = 1.5)
+mtext(2, text = 'Relative Effort', line = 3, outer = T, cex = 1.5)
+```
+
+For an example simulation, harvest strategy S1 produced a decline in initial biomass for both the target and choke species (Figure \ref{fig:biomass}).  This was due to increased effort throughout most of the simulation.  Effort was relatively constant between two and three and a half times base effort (Figure \ref{fig:effort}).  During this simulation there was only one assessment that required target relative effort to be set less than one.  Strategies S2 and S3 produced wider fluctuations in effort (Figure \ref{fig:effort}).  This created cyclical patterns in biomass above and below initial conditions (Figure \ref{fig:biomass}).  Strategy S2's management procedure required a complete moratorium on fishing three times but otherwise kept effort around twice base effort (Figure \ref{fig:effort}).  On the other hand, strategy S3 cycled between periods of extreme fishing with efforts three to four times base effort and zero.
+
+A strength of the MSE process is the ability to assess uncertainty.  Rpath was able to generate 100 simulations of each strategy.  Each batch of 100 simulations took under two minutes to process which means that many other sensitivity analyses could be undertaken if so desired.  Figure \ref{fig:Within var} shows the differences that occur across multiple simulations.  These differences between simulations arise from the observation error added through Equation \ref{survey}.  Even with these differences effort was generally higher for strategy S1 while strategy S3 contained the largest range of effort. 
+
+```{r, fig.cap = "\\label{fig:Within var} Boxplots of the range of effort from ten simulations of the three management strategies.  The top panel in green is strategy S1, the middle panel in orange is strategy S2, and the bottom panel in blue is strategy S3.  Differences between simulations is due to the error term applied to the biomass observations."}
+
+#Within run variability
+opar <- par(mfrow = c(3, 1), mar = c(0, 0, 0, 0), oma = c(4, 6, 2, 2))
+boxplot(S1.effort.10, col = s.colors[1], axes = F, range = 0)
+axis(2, las = T, cex.axis = 1.8)
+box()
+boxplot(S2.effort.10, col = s.colors[2], ylim = c(0, 6.3), axes = F, range = 0)
+axis(2, las = T, cex.axis = 1.8)
+box()
+boxplot(S3.effort.10, col = s.colors[3], axes = F, range = 0)
+axis(2, las = T, cex.axis = 1.8)
+box()
+mtext(2, text = 'Relative Effort', line = 3, cex = 2, outer = T)
+```
+
+```{r, fig.cap= "\\label{fig:Across var} Variability across all 100 simulations."}
+# #Across run variability
+# opar <- par(mfrow = c(1, 3), mar = c(0, 0, 0, 0), oma = c(4, 6, 2, 2))
+# boxplot(S1.effort[, effort], col = s.colors[1], ylim = c(0, 12), axes = F)
+# axis(2, las = T, cex.axis = 2)
+# box()
+# boxplot(S2.effort[, effort], col = s.colors[2], ylim = c(0, 12), axes = F)
+# axis(2, labels = F, las = T, cex.axis = 2)
+# box()
+# boxplot(S3.effort[, effort], col = s.colors[3], ylim = c(0, 12), axes = F)
+# axis(2, labels = F, las = T, cex.axis = 2)
+# box()
+# mtext(2, text = 'Relative Effort', line = 3, cex = 2, outer = T)
+```
+
+Averaging across all 100 simulations, catch of the target species was just below MSY for all three strategies while its biomass was just below B~MSY~ for strategy S1 and above for the others (Figure \ref{fig:results}).  On the other hand, the choke species was depleted in strategy S1 averaging under 0.5 B~MSY~ (Figure \ref{fig:results}). Although not as consistent, the protections implemented in strategies S2 and S3 were somewhat effective for conserving the choke species.  Biomass of the choke species averaged closer to B~MSY~ in those strategies than in strategy S1, but catches were below MSY for all three (Figure \ref{fig:results}).  
+
+```{r, fig.cap = "\\label{fig:results} Means of the average biomass and catch values from 100 simulations of each management strategy relative to B~MSY~ and MSY respectively.  Values of B~MSY~ and MSY were calculated directly from the model.  Error bars represent +/- one standard deviation of the means."}
+#B/Bmsy and F/MSY
+par(mfrow = c(2,2), mar = c(0, 0, 0, 0), oma = c(2, 7, 2, 2))
+
+#B/Bmsy - Target
+plot(0, 0, ylim = c(0, 2.0), xlim = c(0, 4), typ = 'n', axes = F, xlab = '', ylab = '')
+abline(h = 1, lty = 4, col = 'red')
+points(outplot[, omni.BBmsy], pch = 16, cex = 3, col = s.colors)
+for(i in 1:3){
+    arrows(i, outplot[i, omni.BBmsy - omni.BBmsy.sd], y1 = outplot[i, omni.BBmsy + omni.BBmsy.sd], 
+           length = 0.2, angle = 90, code = 3, col = s.colors[i], lwd = 3)
+}
+axis(2, las = T, cex.axis = 1.5)
+box()
+mtext(2, text = expression('B/B'['MSY']), line = 4, cex = 1.5)
+mtext(3, text = 'Target Species', cex = 1.5)
+
+#B/Bmsy - Choke
+plot(0, 0, ylim = c(0, 2.0), xlim = c(0, 4), typ = 'n', axes = F, xlab = '', ylab = '')
+abline(h = 1, lty = 4, col = 'red')
+points(outplot[, medpel.BBmsy], pch = 16, cex = 3, col = s.colors)
+for(i in 1:3){
+    arrows(i, outplot[i, medpel.BBmsy - medpel.BBmsy.sd], y1 = outplot[i, medpel.BBmsy + medpel.BBmsy.sd], 
+           length = 0.2, angle = 90, code = 3, col = s.colors[i], lwd = 3)
+}
+box()
+mtext(3, text = 'Choke Species', cex = 1.5)
+
+#Catch/MSY - Target
+plot(0, 0, ylim = c(0, 2.0), xlim = c(0, 4), typ = 'n', axes = F, xlab = '', ylab = '')
+abline(h = 1, lty = 4, col = 'red')
+points(outplot[, omni.CMSY], pch = 16, cex = 3, col = s.colors)
+for(i in 1:3){
+    arrows(i, outplot[i, omni.CMSY - omni.CMSY.sd], y1 = outplot[i, omni.CMSY + omni.CMSY.sd], 
+           length = 0.2, angle = 90, code = 3, col = s.colors[i], lwd = 3)
+}
+axis(2, las = T, cex.axis = 1.5)
+box()
+mtext(2, text = 'Catch/MSY', line = 4, cex = 1.5)
+
+
+#Catch/MSY - Choke
+plot(0, 0, ylim = c(0, 2.0), xlim = c(0, 4), typ = 'n', axes = F, xlab = '', ylab = '')
+abline(h = 1, lty = 4, col = 'red')
+points(outplot[, medpel.CMSY], pch = 16, cex = 3, col = s.colors)
+for(i in 1:3){
+    arrows(i, outplot[i, medpel.CMSY - medpel.CMSY.sd], y1 = outplot[i, medpel.CMSY + medpel.CMSY.sd], 
+           length = 0.2, angle = 90, code = 3, col = s.colors[i], lwd = 3)
+}
+box()
+```
+
+Strategy S3 had the greatest interannual variation in catch (Figure \ref{fig:IAV}).  This is evident when analyzing individual simulations such as Figure \ref{fig:effort}.  The effort penalty cycles the fishery through periods of intense fishing and zero fishing.  This is most likely not an economically sustainable strategy.  Ultimately this would be up to the stakeholders and manager to decide however this does highlight the ability of MSEs to identify strategies that are not feasible [@butterworth_data_poor_2010].  Surprisingly strategy S2 had a lower interannual variation in the catch than strategy S1.  This result may not be evident when examining just one realization of each strategy such as in Figure \ref{fig:effort}.
+
+```{r, fig.cap= "\\label{fig:IAV} Boxplots of the interannual variation in the catch for both the target and choke species combined for all 100 simulations.  The first panel in green is strategy S1.  The middle panel in orange is strategy S2.  The last panel in blue is strategy S3."}
+#IAV
+opar <- par(mfrow = c(1, 3), mar = c(0, 0, 0, 0), oma = c(4, 10, 2, 2))
+boxplot(S1.iav, col = s.colors[1], ylim = c(0, 2.5), axes = F, cex = 2)
+axis(2, las = T, cex.axis = 2)
+box()
+boxplot(S2.iav, col = s.colors[2], ylim = c(0, 2.5), axes = F, cex = 2)
+axis(2, labels = F, las = T, cex.axis = 2)
+box()
+boxplot(S3.iav, col = s.colors[3], ylim = c(0, 2.5), axes = F, cex = 2)
+axis(2, labels = F, las = T, cex.axis = 2)
+box()
+mtext(2, text = 'Interannual Variation (IAV)\n of the Catch', line = 3.8, cex = 2, outer = T)
+
+```
+
+Several ecosystem indicators were also examined.  Measures of trophic structure, diversity, and system productivity were calculated from each simulation.  Unfortunately, the relatively simple structure of the Georges Bank model did not allow for any differences.  The only result of note was the added variability in the metrics which mirrored the increased variability in the biomass and catch indicators.
+
+## Discussion
+
+There has been a general push to incorporate ecosystem level objectives in fisheries management for some time now [e.g. @sainsbury_ecosys_objectives_2000; @pikitch_EBFM_2004; @fogarty_art_EBFM_2014].  This has naturally arisen as biological, technical, and even environmental interactions all play a role in species production and ultimately fisheries management.  Even the simple example demonstrated here shows that setting a fishing target without considering these interactions can be detrimental to other parts of the system.  Other examples using much more complex models have also shown that ecosystem and multispecies management outperform single species [@fulton_ecosystems_2019].  
+
+Despite the call for EBFM, progress has been relatively slow [@pitcher_EBFM_progress_2009]. This is partially due to institutional inertia as well as uncertainty in applying ecosystem principles to management [@hilborn_future_EBFM_2011; @fogarty_art_EBFM_2014]. A way forward with the latter is to conduct ecosystem level MSEs.  MSEs been shown to be effective at developing fishery-specific or even generic management strategies, and they can identify strategies that will not work [@butterworth_data_poor_2010].  However, in order to test ecosystem strategies there needs to be a full ecosystem operating model.
+
+Computational power is often cited as the reason more ecosystem models are not used in MSEs [@sainsbury_ecosys_objectives_2000; @punt_MSE_best_2016].  Although this justification may be fair for some of the biogeochemical models such as Atlantis [@fulton_atlantis_2011], mass balance food web models do not require a large amount of computational overhead to run.  As previously stated, mass balance models are informative tools for testing the ecosystem effects of management strategies as well as the impact of environmental drivers [@plaganyi_models_2007; @fulton_approaches_2010].  However, just as with any modeling framework it is important to understand the underlying assumptions of your modelling framework [@fulton_approaches_2010].  
+
+Ecopath with Ecosim is a popular tool for ecosystem modeling but not ideally set-up to be used as an operating model for MSE.  While there have been several projects that have used Ecopath as an operating model [@pikitch_lenfest_2012; @mackinson_EwE_MSE_2018; @surma_herring_MSE_2018; @nielsen_MCA_2019], they did not include closed-loop adaptive feedback from the management procedure.  The software package does have a built-in MSE tool that simulates the variability in assessment outputs to change fishing effort [@Ecopath_msebatch_2019] but complex strategies cannot be tested [@surma_herring_MSE_2018]. @mackinson_EwE_MSE_2018 used a plug-in that allowed more customization.  With the development of Rpath we are hoping that more people will be able to replicate those efforts and create true feedback loops.
+
+The demonstration shown here is a simple example of extending the usefulness of a mass balance model by allowing it to have full feedback from management strategies.  We used this simple, highly aggregated model so the focus would be on the tool and not on the results.  A more complicated, disaggregated model could quickly become overwhelming with the permutations of fleets, bycatch, and other factors that could be tested.  The outcomes of which would be scrutinized, hiding the novelty of the tool development.  This consideration does highlight the need to define a tractable set of alternative strategies when using an ecosystem model so that when working with a real-world application the scope of the simulations does not overwhelm stakeholders and managers alike [@fulton_EBFM_MSE_2014; @deroba_herring_MSE_2019].  
+
+Even with the simple example, the results show the effects of considering technical interactions.  While all three scenarios on average produced similar catch levels, scenarios S2 and S3 provided additions protection for the choke species.  Had this been an actual MSE, the ultimate evaluation criteria for selecting a management strategy would be based on the inherent trade-offs within the system which by using a full ecosystem model can now be shown more explicitly. Managers choosing between these three strategies would most likely choose S2 as the interannual variation in the catch is the least and offers protection for the choke species.
+
+One thing not explicitly demonstrated here is the ability to couple the Rpath framework to other models.  As computational power has increased it is becoming more common for models of various types to be coupled together [@fulton_approaches_2010].  Mass balance models are well suited to do so and the functionality of Rpath demonstrated here should increase the feasibility of doing so.  This would be another big step forward for the MSE process as climate is usually empirically linked to outcomes [@punt_MSE_best_2016].
+
+## Conclusions
+
+Fisheries management can benefit greatly by using integrated ecosystem or multi-species strategies rather than single species procedures [@fulton_ecosystems_2019].  It is also theorized that EBFM can provide both ecological and economic benefits by explicitly addressing trade-offs within a system [@link_EBFM_2010; @link_benefits_2018].  A good way to explore trade-offs within the system and the impact of both ecosystem and single species strategies is with an MSE utilizing a full ecosystem model.  A good compromise between complexity and system components is a mass balance food web model.  The functionality demonstrated here should allow for Rpath to be used as a flexible operating model, capable of testing a wide range of management strategies.   
+
+\pagebreak
+
+References {#references .unnumbered}
+==========
